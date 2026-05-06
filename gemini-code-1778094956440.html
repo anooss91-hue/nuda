@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Złap Kuriera MOBILE</title>
+    <style>
+        :root { --safe-top: env(safe-area-inset-top); }
+        
+        body { 
+            margin: 0; padding: 0; overflow: hidden; 
+            background: #222; font-family: 'Segoe UI', Roboto, sans-serif;
+            user-select: none; -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        canvas { 
+            display: block; background: linear-gradient(to bottom, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .ui-top {
+            position: absolute; top: calc(10px + var(--safe-top)); width: 100%;
+            text-align: center; pointer-events: none; color: white;
+            text-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+        }
+
+        .score-box { font-size: 32px; font-weight: 900; color: #fff; }
+        .msg-pop { font-size: 20px; color: #ffeb3b; height: 30px; font-weight: bold; }
+
+        .selector-grid {
+            position: absolute; bottom: 30px; width: 100%;
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 8px; padding: 0 15px; box-sizing: border-box;
+            pointer-events: auto;
+        }
+
+        button {
+            border: 2px solid rgba(255,255,255,0.5); border-radius: 12px;
+            padding: 12px 5px; font-size: 12px; font-weight: bold;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.2); transition: transform 0.05s;
+            text-transform: uppercase;
+        }
+
+        button:active { transform: translateY(4px); box-shadow: none; }
+
+        /* Kolory firmowe */
+        .dhl { background: #ffcc00; color: #d40511; }
+        .inpost { background: #ffc400; color: #000; }
+        .dpd { background: #dc0032; color: #fff; }
+        .orlen { background: #ed1c24; color: #fff; }
+        .ups { background: #351c15; color: #ffb500; }
+        .gls { background: #003882; color: #fff; }
+    </style>
+</head>
+<body>
+
+<div class="ui-top">
+    <div class="score-box">PUNKTY: <span id="score">0</span></div>
+    <div id="msg" class="msg-pop"></div>
+</div>
+
+<div class="selector-grid">
+    <button class="dhl" onclick="setCourier('dhl', '#ffcc00')">DHL</button>
+    <button class="inpost" onclick="setCourier('inpost', '#ffc400')">InPost</button>
+    <button class="dpd" onclick="setCourier('dpd', '#dc0032')">DPD</button>
+    <button class="orlen" onclick="setCourier('orlen', '#ed1c24')">Orlen</button>
+    <button class="ups" onclick="setCourier('ups', '#351c15')">UPS</button>
+    <button class="gls" onclick="setCourier('gls', '#003882')">GLS</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const msgEl = document.getElementById('msg');
+
+// Dopasowanie do DPI ekranu mobilnego (ostrość grafiki)
+const dpr = window.devicePixelRatio || 1;
+canvas.width = window.innerWidth * dpr;
+canvas.height = window.innerHeight * dpr;
+ctx.scale(dpr, dpr);
+canvas.style.width = window.innerWidth + 'px';
+canvas.style.height = window.innerHeight + 'px';
+
+let score = 0;
+const images = { body: new Image(), hat: new Image() };
+
+let courier = {
+    company: 'inpost',
+    color: '#ffc400',
+    x: window.innerWidth / 2,
+    y: window.innerHeight - 250,
+    w: 80, h: 120,
+    speed: 3,
+    dir: 1,
+    hatY: 0,
+    isHit: false,
+    stun: 0
+};
+
+function setCourier(name, color) {
+    courier.company = name;
+    courier.color = color;
+    courier.isHit = false;
+    courier.hatY = 0;
+    images.body.src = name + '_body.png';
+    images.hat.src = name + '_hat.png';
+}
+
+function draw() {
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+    // Trawa/Podłoże
+    ctx.fillStyle = '#2e7d32';
+    ctx.fillRect(0, window.innerHeight - 150, window.innerWidth, 150);
+
+    const cx = courier.x;
+    const cy = courier.y;
+
+    // Rysowanie kuriera (grafika lub kształt)
+    if (images.body.complete && images.body.naturalWidth > 0) {
+        ctx.drawImage(images.body, cx - courier.w/2, cy, courier.w, courier.h);
+    } else {
+        ctx.fillStyle = courier.color;
+        ctx.fillRect(cx - courier.w/2, cy, courier.w, courier.h);
+        ctx.fillStyle = "#ffdbac";
+        ctx.beginPath(); ctx.arc(cx, cy - 25, 30, 0, Math.PI*2); ctx.fill();
+    }
+
+    // Czapka
+    let hy = cy - 55 + courier.hatY;
+    if (images.hat.complete && images.hat.naturalWidth > 0) {
+        ctx.drawImage(images.hat, cx - 40, hy, 80, 50);
+    } else {
+        ctx.fillStyle = "#333";
+        ctx.fillRect(cx - 35, hy, 70, 15); // daszek
+    }
+
+    // Logika ruchu
+    if (courier.stun <= 0) {
+        courier.x += (courier.speed + (score * 0.15)) * courier.dir;
+        if (courier.x > window.innerWidth - 40 || courier.x < 40) courier.dir *= -1;
+    } else {
+        courier.stun--;
+    }
+
+    if (courier.isHit) {
+        courier.hatY -= 15;
+        if (courier.hatY < -500) { courier.isHit = false; courier.hatY = 0; }
+    }
+
+    requestAnimationFrame(draw);
+}
+
+// Obsługa dotyku (Mobile)
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault(); // Blokuje scrollowanie przy graniu
+    const touch = e.touches[0];
+    const tx = touch.clientX;
+    const ty = touch.clientY;
+
+    // Hitbox
+    if (tx > courier.x - 50 && tx < courier.x + 50 &&
+        ty > courier.y - 60 && ty < courier.y + courier.h) {
+        
+        if (!courier.isHit) {
+            score++;
+            scoreEl.innerText = score;
+            courier.isHit = true;
+            courier.stun = 30;
+
+            // Wibracje na telefonie!
+            if (navigator.vibrate) navigator.vibrate(50);
+
+            const txt = ["AWIZO?!", "BIEGNIJ!", "A MASZ!", "TRAFIONY!", "PO PACZKĘ!"];
+            msgEl.innerText = txt[Math.floor(Math.random()*txt.length)];
+            setTimeout(() => msgEl.innerText = "", 800);
+        }
+    }
+}, {passive: false});
+
+// Inicjalizacja
+setCourier('inpost', '#ffc400');
+draw();
+</script>
+</body>
+</html>
